@@ -4,9 +4,11 @@ import (
 	"context"
 	"github.com/madsrc/webway"
 	"github.com/madsrc/webway/agent/internal/grpc"
+	"github.com/madsrc/webway/agent/internal/sarama"
 	pb "github.com/madsrc/webway/gen/go/webway/v1"
 	"github.com/madsrc/webway/koanf"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,9 +18,11 @@ import (
 type services struct {
 	metadataStoreGrpcConn   *grpc.ClientConn
 	metadataStoreGrpcClient pb.MetadataStoreClient
+	kafkaServer             *sarama.KafkaServer
 }
 
 func (s *services) GracefulStop() {
+	s.kafkaServer.GracefulStop()
 	s.metadataStoreGrpcConn.GracefulStop()
 }
 
@@ -55,6 +59,11 @@ func main() {
 	hbTicker := time.NewTicker(hbInterval)
 	hbQuit := make(chan struct{})
 
+	lis, err := net.Listen("tcp", "0.0.0.0:9092")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
 	go func() {
 		for {
 			select {
@@ -64,6 +73,10 @@ func main() {
 				return
 			}
 		}
+	}()
+
+	go func() {
+		_ = svcs.kafkaServer.Serve(lis)
 	}()
 
 	select {
@@ -97,6 +110,8 @@ func setupServices(cfg webway.Config) (*services, error) {
 	}
 
 	svcs.metadataStoreGrpcClient = pb.NewMetadataStoreClient(svcs.metadataStoreGrpcConn)
+
+	svcs.kafkaServer, err = sarama.NewKafkaServer()
 
 	return svcs, nil
 }
