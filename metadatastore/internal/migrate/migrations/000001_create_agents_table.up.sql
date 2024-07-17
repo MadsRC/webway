@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS agents(
+    id SERIAL NOT NULL PRIMARY KEY,
+    agent_id VARCHAR(100) UNIQUE NOT NULL,
+    availability_zone VARCHAR(100) NOT NULL,
+    last_seen TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ
+);

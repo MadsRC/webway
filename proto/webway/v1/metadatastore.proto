@@ -1,0 +1,36 @@
+syntax = "proto3";
+package webway.v1;
+
+option go_package = "github.com/madsrc/webway/proto/webway/v1";
+
+service MetadataStore {
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse) {};
+  rpc DeregisterAgent(DeregisterAgentRequest) returns (DeregisterAgentResponse) {};
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {};
+}
+
+message RegisterAgentRequest {
+  string agent_id = 1;
+  string availability_zone = 2;
+}
+
+message RegisterAgentResponse{}
+
+message DeregisterAgentRequest {
+  string agent_id = 1;
+}
+
+message DeregisterAgentResponse{}
+
+message GetMetadataRequest {
+  string availability_zone = 1;
+}
+
+message GetMetadataResponse {
+  repeated Agent agents = 1;
+}
+
+message Agent {
+  string id = 1;
+  string availability_zone = 2;
+}
