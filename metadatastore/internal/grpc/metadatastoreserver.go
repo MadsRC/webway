@@ -45,7 +45,7 @@ func NewMetadataStoreServer(opt ...MetadataStoreServerOption) (*MetadataStoreSer
 }
 
 type metadataStoreServerOptions struct {
-	AgentDatastore      metadatastore.AgentDatastore
+	AgentDatastore      metadatastore.Datastore
 	AgentAliveThreshold time.Duration
 	UUIDService         metadatastore.UUIDService
 	ClusterID           string
@@ -76,7 +76,7 @@ func newFuncMetadataStoreServerOption(f func(*metadataStoreServerOptions)) *func
 	}
 }
 
-func WithMetadataStoreServerAgentStore(agentStore metadatastore.AgentDatastore) MetadataStoreServerOption {
+func WithMetadataStoreServerAgentStore(agentStore metadatastore.Datastore) MetadataStoreServerOption {
 	return newFuncMetadataStoreServerOption(func(o *metadataStoreServerOptions) {
 		o.AgentDatastore = agentStore
 	})
@@ -117,7 +117,7 @@ func (m *MetadataStoreServer) generateClusterID() (string, error) {
 }
 
 func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
-	err := m.opts.AgentDatastore.Create(ctx, &metadatastore.Agent{
+	err := m.opts.AgentDatastore.CreateAgent(ctx, &metadatastore.Agent{
 		ID:               request.AgentId,
 		AvailabilityZone: request.AvailabilityZone,
 	})
@@ -125,7 +125,7 @@ func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.Reg
 		return nil, err
 	}
 	if errors.Is(err, pgx.ErrAlreadyExists) {
-		err = m.opts.AgentDatastore.Update(ctx, &metadatastore.Agent{
+		err = m.opts.AgentDatastore.UpdateAgent(ctx, &metadatastore.Agent{
 			ID:               request.AgentId,
 			AvailabilityZone: request.AvailabilityZone,
 		})
@@ -137,7 +137,7 @@ func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.Reg
 }
 
 func (m *MetadataStoreServer) DeregisterAgent(ctx context.Context, request *pb.DeregisterAgentRequest) (*pb.DeregisterAgentResponse, error) {
-	err := m.opts.AgentDatastore.Delete(ctx, request.AgentId)
+	err := m.opts.AgentDatastore.DeleteAgent(ctx, request.AgentId)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMe
 		})
 	}
 
-	// Next step is to return the list of topics, and select a agent/broker to be the leader for all topic partitions
+	// Next step is to return the list of topics, and select an agent/broker to be the leader for all topic partitions
 	// as per https://www.warpstream.com/blog/hacking-the-kafka-protocol#load-balancing
 	// This needs to be done in a round-robin fashion... Which necessitates keeping some state.
 

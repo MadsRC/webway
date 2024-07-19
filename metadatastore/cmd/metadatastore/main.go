@@ -19,7 +19,7 @@ import (
 
 type services struct {
 	migrationService        *migrate.MigrationService
-	agentDatastore          *pgx.AgentDatastore
+	agentDatastore          *pgx.Datastore
 	grpcMetadataStoreServer *grpc.MetadataStoreServer
 	grpcServer              *grpc.Server
 	uuidService             metadatastore.UUIDService
@@ -87,8 +87,8 @@ func setupServices(cfg webway.Config) (*services, error) {
 		return nil, err
 	}
 
-	svcs.agentDatastore, err = pgx.NewAgentDatastore(
-		pgx.WithAgentDatastoreConnectionString(cfg.String("datastore.connection_string")),
+	svcs.agentDatastore, err = pgx.NewDatastore(
+		pgx.WithDatastoreConnectionString(cfg.String("datastore.connection_string")),
 	)
 	if err != nil {
 		return nil, err
