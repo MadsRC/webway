@@ -22,5 +22,6 @@ a completely new project, and is not affiliated with [WarpStream] in any way.
 - https://docs.warpstream.com/warpstream/overview/architecture/read-path
 - https://www.warpstream.com/blog/minimizing-s3-api-costs-with-distributed-mmap
 - https://docs.warpstream.com/warpstream/overview/architecture/life-of-a-request
+- https://kafka.apache.org/protocol.html#The_Messages_Metadata
 
 [WarpStream]: https://warpstream.com

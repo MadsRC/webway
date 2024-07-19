@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"github.com/madsrc/webway"
 	pb "github.com/madsrc/webway/gen/go/webway/v1"
@@ -27,15 +28,27 @@ func NewMetadataStoreServer(opt ...MetadataStoreServerOption) (*MetadataStoreSer
 	if opts.AgentDatastore == nil {
 		return nil, &webway.MissingOptionError{Option: "agentdatastore"}
 	}
+	if opts.UUIDService == nil {
+		return nil, &webway.MissingOptionError{Option: "uuidservice"}
+	}
 
-	return &MetadataStoreServer{
+	mds := &MetadataStoreServer{
 		opts: &opts,
-	}, nil
+	}
+
+	_, err := mds.generateClusterID()
+	if err != nil {
+		return nil, err
+	}
+
+	return mds, nil
 }
 
 type metadataStoreServerOptions struct {
 	AgentDatastore      metadatastore.AgentDatastore
 	AgentAliveThreshold time.Duration
+	UUIDService         metadatastore.UUIDService
+	ClusterID           string
 }
 
 var defaultMetadataStoreServerOptions = metadataStoreServerOptions{
@@ -75,6 +88,34 @@ func WithMetadataStoreServerAgentAliveThreshold(agentAliveThreshold time.Duratio
 	})
 }
 
+func WithMetadataStoreServerUUIDService(uuidService metadatastore.UUIDService) MetadataStoreServerOption {
+	return newFuncMetadataStoreServerOption(func(o *metadataStoreServerOptions) {
+		o.UUIDService = uuidService
+	})
+}
+
+func WithMetadataStoreServerClusterID(clusterID string) MetadataStoreServerOption {
+	return newFuncMetadataStoreServerOption(func(o *metadataStoreServerOptions) {
+		o.ClusterID = clusterID
+	})
+}
+
+func (m *MetadataStoreServer) generateClusterID() (string, error) {
+	if m.opts.ClusterID != "" {
+		return m.opts.ClusterID, nil
+	}
+
+	str, err := m.opts.UUIDService.RandomUUID()
+	if err != nil {
+		return "", err
+	}
+	b, err := m.opts.UUIDService.ParseUUID(str)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
 func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
 	err := m.opts.AgentDatastore.Create(ctx, &metadatastore.Agent{
 		ID:               request.AgentId,
@@ -104,25 +145,28 @@ func (m *MetadataStoreServer) DeregisterAgent(ctx context.Context, request *pb.D
 }
 
 func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMetadataRequest) (*pb.GetMetadataResponse, error) {
-	allAgents, err := m.opts.AgentDatastore.ReadAll(ctx)
+	var response pb.GetMetadataResponse
+
+	az := metadatastore.AvailabilityZone(request.AvailabilityZone)
+
+	_, agents, err := az.Healthy(ctx, 1, m.opts.AgentAliveThreshold, m.opts.AgentDatastore)
 	if err != nil {
 		return nil, err
 	}
 
-	var response pb.GetMetadataResponse
+	response.ClusterId = m.opts.ClusterID
 	response.Agents = make([]*pb.Agent, 0)
 
-	for _, agent := range allAgents {
-		if agent.AvailabilityZone == request.AvailabilityZone {
-			if time.Since(agent.LastSeen) > m.opts.AgentAliveThreshold {
-				continue
-			}
-			response.Agents = append(response.Agents, &pb.Agent{
-				Id:               agent.ID,
-				AvailabilityZone: agent.AvailabilityZone,
-			})
-		}
+	for _, agent := range agents {
+		response.Agents = append(response.Agents, &pb.Agent{
+			Id:               agent.ID,
+			AvailabilityZone: agent.AvailabilityZone,
+		})
 	}
+
+	// Next step is to return the list of topics, and select a agent/broker to be the leader for all topic partitions
+	// as per https://www.warpstream.com/blog/hacking-the-kafka-protocol#load-balancing
+	// This needs to be done in a round-robin fashion... Which necessitates keeping some state.
 
 	return &response, nil
 }

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"github.com/madsrc/webway"
 	"github.com/madsrc/webway/koanf"
+	"github.com/madsrc/webway/metadatastore"
 	"github.com/madsrc/webway/metadatastore/internal/grpc"
 	"github.com/madsrc/webway/metadatastore/internal/migrate"
 	"github.com/madsrc/webway/metadatastore/internal/pgx"
+	"github.com/madsrc/webway/metadatastore/internal/uuid"
 	"log"
 	"net"
 	"os"
@@ -20,6 +22,7 @@ type services struct {
 	agentDatastore          *pgx.AgentDatastore
 	grpcMetadataStoreServer *grpc.MetadataStoreServer
 	grpcServer              *grpc.Server
+	uuidService             metadatastore.UUIDService
 }
 
 func (s *services) GracefulStop() {
@@ -91,8 +94,21 @@ func setupServices(cfg webway.Config) (*services, error) {
 		return nil, err
 	}
 
-	svcs.grpcMetadataStoreServer, err = grpc.NewMetadataStoreServer(
+	svcs.uuidService, err = uuid.NewUUIDService()
+	if err != nil {
+		return nil, err
+	}
+
+	grpcMdsOptions := []grpc.MetadataStoreServerOption{
 		grpc.WithMetadataStoreServerAgentStore(svcs.agentDatastore),
+		grpc.WithMetadataStoreServerUUIDService(svcs.uuidService),
+	}
+	if cfg.String("kafka.cluster_id") != "" {
+		grpcMdsOptions = append(grpcMdsOptions, grpc.WithMetadataStoreServerClusterID(cfg.String("kafka.cluster_id")))
+	}
+
+	svcs.grpcMetadataStoreServer, err = grpc.NewMetadataStoreServer(
+		grpcMdsOptions...,
 	)
 	if err != nil {
 		return nil, err

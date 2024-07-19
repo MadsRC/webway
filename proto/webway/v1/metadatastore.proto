@@ -23,14 +23,33 @@ message DeregisterAgentRequest {
 message DeregisterAgentResponse{}
 
 message GetMetadataRequest {
-  string availability_zone = 1;
+  string client_id = 1;
+  string availability_zone = 2;
 }
 
 message GetMetadataResponse {
   repeated Agent agents = 1;
+  string cluster_id = 2;
+  repeated Topic topics = 3;
+}
+
+message Heartbeat {
+  string agent_id = 1;
+  string availability_zone = 2;
 }
 
 message Agent {
   string id = 1;
   string availability_zone = 2;
+}
+
+message Topic {
+  string name = 1;
+  string topic_id = 2;
+  bool is_internal = 3;
+  repeated Partition partitions = 4;
+}
+
+message Partition {
+  int32 leader_id = 1;
 }
