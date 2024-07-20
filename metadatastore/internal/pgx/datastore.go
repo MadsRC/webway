@@ -93,53 +93,101 @@ func (a *Datastore) DeleteAgent(ctx context.Context, agentID string) error {
 }
 
 func (a *Datastore) CreateTopic(ctx context.Context, topic *metadatastore.Topic) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := a.db.Exec(ctx, "INSERT INTO topics (topic_id, name, internal) VALUES ($1, $2)", topic.ID, topic.Name, topic.Internal)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
 }
 
 func (a *Datastore) ReadTopic(ctx context.Context, topicID string) (*metadatastore.Topic, error) {
-	//TODO implement me
-	panic("implement me")
+	rows, _ := a.db.Query(ctx, "SELECT topic_id, name, internal FROM topics WHERE topic_id = $1 AND deleted_at IS NULL", topicID)
+	topic, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[metadatastore.Topic])
+	if err != nil {
+		return nil, err
+	}
+	return &topic, nil
 }
 
 func (a *Datastore) ReadAllTopics(ctx context.Context) ([]*metadatastore.Topic, error) {
-	//TODO implement me
-	panic("implement me")
+	rows, _ := a.db.Query(ctx, "SELECT topic_id, name, internal FROM topics WHERE deleted_at IS NULL")
+	topics, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[metadatastore.Topic])
+	if err != nil {
+		return nil, err
+	}
+	return topics, nil
 }
 
 func (a *Datastore) UpdateTopic(ctx context.Context, topic *metadatastore.Topic) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := a.db.Exec(ctx, "UPDATE topics SET name = $1, internal = $2 WHERE topic_id = $3", topic.Name, topic.Internal, topic.ID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *Datastore) DeleteTopic(ctx context.Context, topicID string) error {
-	//TODO implement me
-	panic("implement me")
+	tag, err := a.db.Exec(ctx, "UPDATE topics SET deleted_at = $1 WHERE topic_id = $2", time.Now(), topicID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (a *Datastore) CreatePartition(ctx context.Context, partition *metadatastore.Partition) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := a.db.Exec(ctx, "INSERT INTO partitions (partition_id, topic_id) VALUES ($1, $2)", partition.ID, partition.TopicID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
 }
 
 func (a *Datastore) ReadPartition(ctx context.Context, partitionID string) (*metadatastore.Partition, error) {
-	//TODO implement me
-	panic("implement me")
+	rows, _ := a.db.Query(ctx, "SELECT partition_id, topic_id FROM partitions WHERE partition_id = $1 AND deleted_at IS NULL", partitionID)
+	partition, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[metadatastore.Partition])
+	if err != nil {
+		return nil, err
+	}
+	return &partition, nil
 }
 
 func (a *Datastore) ReadAllPartitions(ctx context.Context) ([]*metadatastore.Partition, error) {
-	//TODO implement me
-	panic("implement me")
+	rows, _ := a.db.Query(ctx, "SELECT partition_id, topic_id FROM partitions WHERE deleted_at IS NULL")
+	partitions, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[metadatastore.Partition])
+	if err != nil {
+		return nil, err
+	}
+	return partitions, nil
 }
 
 func (a *Datastore) UpdatePartition(ctx context.Context, partition *metadatastore.Partition) error {
-	//TODO implement me
-	panic("implement me")
+	_, err := a.db.Exec(ctx, "UPDATE partitions SET topic_id = $1 WHERE partition_id = $2", partition.TopicID, partition.ID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *Datastore) DeletePartition(ctx context.Context, partitionID string) error {
-	//TODO implement me
-	panic("implement me")
+	tag, err := a.db.Exec(ctx, "UPDATE partitions SET deleted_at = $1 WHERE partition_id = $2", time.Now(), partitionID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 type datastoreOptions struct {
