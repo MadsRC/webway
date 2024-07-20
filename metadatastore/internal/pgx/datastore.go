@@ -3,6 +3,7 @@ package pgx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,7 +57,7 @@ func (a *Datastore) CreateAgent(ctx context.Context, agent *metadatastore.Agent)
 }
 
 func (a *Datastore) ReadAgent(ctx context.Context, agentID string) (*metadatastore.Agent, error) {
-	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE agent_id = $1 AND deleted_at IS NULL", agentID)
+	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE agent_id = $1 AND deleted_at IS NULL ORDER BY id", agentID)
 	agent, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[metadatastore.Agent])
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (a *Datastore) ReadAgent(ctx context.Context, agentID string) (*metadatasto
 }
 
 func (a *Datastore) ReadAllAgents(ctx context.Context) ([]*metadatastore.Agent, error) {
-	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE deleted_at IS NULL")
+	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE deleted_at IS NULL ORDER BY id")
 	agents, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[metadatastore.Agent])
 	if err != nil {
 		return nil, err
@@ -188,6 +189,43 @@ func (a *Datastore) DeletePartition(ctx context.Context, partitionID string) err
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (a *Datastore) RoundRobinForAz(ctx context.Context, az string, liveAgents int) (int, error) {
+	if liveAgents == 0 {
+		return 0, fmt.Errorf("no live agents")
+	}
+	tx, err := a.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var index int
+	err = tx.QueryRow(ctx, "SELECT index FROM agent_round_robin WHERE availability_zone = $1 LIMIT 1;", az).Scan(&index)
+	if err != nil {
+		_, err := tx.Exec(ctx, "INSERT INTO agent_round_robin (availability_zone, index) VALUES ($1, $2)", az, 0)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	newIndex := index + 1
+	if newIndex >= liveAgents {
+		newIndex = 0
+	}
+
+	_, err = tx.Exec(ctx, "UPDATE agent_round_robin SET index = $1 WHERE availability_zone = $2", newIndex, az)
+	if err != nil {
+		return 0, err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return newIndex, nil
 }
 
 type datastoreOptions struct {

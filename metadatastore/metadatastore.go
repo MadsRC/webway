@@ -2,6 +2,7 @@ package metadatastore
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -31,15 +32,46 @@ func (az AvailabilityZone) String() string {
 // heartbeat within the defined livenessThreshold.
 //
 // If the availability zone is empty (i.e. NoAz), then all agents that have sent a heartbeat within the defined
-// livenessThreshold are considered live, regardless of their availability zone.
-func (az AvailabilityZone) Healthy(ctx context.Context, quorum int, livenessThreshold time.Duration, ds Datastore) (bool, []*Agent, error) {
+// livenessThreshold are considered live.
+//
+// The int returned is the index of the agent that is the leader for the availability zone. In the event that there are
+// no live agents in the availability zone, and the availability zone is not [NoAz], then the leader is chosen amongst
+// all live agents. If there is no live agents in the availability zone, and the availability zone is [NoAz], then
+// an error is returned.
+func (az AvailabilityZone) Healthy(ctx context.Context, quorum int, livenessThreshold time.Duration, ds Datastore) (bool, []*Agent, int, error) {
 	allAgents, err := ds.ReadAllAgents(ctx)
 	if err != nil {
-		return false, nil, err
+		return false, nil, 0, err
 	}
 
+	liveAgents := getLiveAgentsForAZ(az, allAgents, livenessThreshold)
+
+	if len(liveAgents) < quorum {
+		if az == NoAz {
+			return false, nil, 0, fmt.Errorf("not enough live agents")
+		}
+		// get live agents for the global "NoAz" az
+		liveAgents = getLiveAgentsForAZ(NoAz, allAgents, livenessThreshold)
+		if len(liveAgents) < quorum {
+			return false, nil, 0, fmt.Errorf("not enough live agents in availability zone %s", az)
+		}
+	}
+
+	// Selecting the agent to be the topic leader for the availability zone, done in a round-robin fashion. We're using
+	// the datastore to keep state (using the RoundRobinForAz method). Could be optimized...
+	// See https://www.warpstream.com/blog/hacking-the-kafka-protocol#load-balancing for reasoning for using round-robin
+	// as the load balancing technique.
+	lai, err := ds.RoundRobinForAz(ctx, string(az), len(liveAgents))
+	if err != nil {
+		return false, nil, 0, err
+	}
+
+	return true, liveAgents, lai, nil
+}
+
+func getLiveAgentsForAZ(az AvailabilityZone, agents []*Agent, livenessThreshold time.Duration) []*Agent {
 	liveAgents := make([]*Agent, 0)
-	for _, agent := range allAgents {
+	for _, agent := range agents {
 		if agent.IsLive(livenessThreshold) {
 			if agent.AvailabilityZone == string(az) || az == NoAz {
 				liveAgents = append(liveAgents, agent)
@@ -47,10 +79,7 @@ func (az AvailabilityZone) Healthy(ctx context.Context, quorum int, livenessThre
 		}
 	}
 
-	if len(liveAgents) >= quorum {
-		return true, liveAgents, nil
-	}
-	return false, nil, nil
+	return liveAgents
 }
 
 type Datastore interface {
@@ -71,6 +100,8 @@ type Datastore interface {
 	ReadAllPartitions(ctx context.Context) ([]*Partition, error)
 	UpdatePartition(ctx context.Context, partition *Partition) error
 	DeletePartition(ctx context.Context, partitionID string) error
+
+	RoundRobinForAz(ctx context.Context, az string, liveAgents int) (int, error)
 }
 
 type Topic struct {

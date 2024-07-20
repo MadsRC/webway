@@ -23,8 +23,7 @@ message DeregisterAgentRequest {
 message DeregisterAgentResponse{}
 
 message GetMetadataRequest {
-  string client_id = 1;
-  string availability_zone = 2;
+  string availability_zone = 1;
 }
 
 message GetMetadataResponse {
@@ -51,5 +50,6 @@ message Topic {
 }
 
 message Partition {
-  int32 leader_id = 1;
+  string leader_id = 1;
+  int32 id = 2;
 }

@@ -100,7 +100,7 @@ func setupServices(cfg webway.Config) (*services, error) {
 	}
 
 	grpcMdsOptions := []grpc.MetadataStoreServerOption{
-		grpc.WithMetadataStoreServerAgentStore(svcs.agentDatastore),
+		grpc.WithMetadataStoreServerDatastore(svcs.agentDatastore),
 		grpc.WithMetadataStoreServerUUIDService(svcs.uuidService),
 	}
 	if cfg.String("kafka.cluster_id") != "" {

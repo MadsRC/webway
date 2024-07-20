@@ -25,7 +25,7 @@ func NewMetadataStoreServer(opt ...MetadataStoreServerOption) (*MetadataStoreSer
 		o.apply(&opts)
 	}
 
-	if opts.AgentDatastore == nil {
+	if opts.Datastore == nil {
 		return nil, &webway.MissingOptionError{Option: "agentdatastore"}
 	}
 	if opts.UUIDService == nil {
@@ -45,7 +45,7 @@ func NewMetadataStoreServer(opt ...MetadataStoreServerOption) (*MetadataStoreSer
 }
 
 type metadataStoreServerOptions struct {
-	AgentDatastore      metadatastore.Datastore
+	Datastore           metadatastore.Datastore
 	AgentAliveThreshold time.Duration
 	UUIDService         metadatastore.UUIDService
 	ClusterID           string
@@ -76,9 +76,9 @@ func newFuncMetadataStoreServerOption(f func(*metadataStoreServerOptions)) *func
 	}
 }
 
-func WithMetadataStoreServerAgentStore(agentStore metadatastore.Datastore) MetadataStoreServerOption {
+func WithMetadataStoreServerDatastore(datastore metadatastore.Datastore) MetadataStoreServerOption {
 	return newFuncMetadataStoreServerOption(func(o *metadataStoreServerOptions) {
-		o.AgentDatastore = agentStore
+		o.Datastore = datastore
 	})
 }
 
@@ -117,7 +117,7 @@ func (m *MetadataStoreServer) generateClusterID() (string, error) {
 }
 
 func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
-	err := m.opts.AgentDatastore.CreateAgent(ctx, &metadatastore.Agent{
+	err := m.opts.Datastore.CreateAgent(ctx, &metadatastore.Agent{
 		ID:               request.AgentId,
 		AvailabilityZone: request.AvailabilityZone,
 	})
@@ -125,7 +125,7 @@ func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.Reg
 		return nil, err
 	}
 	if errors.Is(err, pgx.ErrAlreadyExists) {
-		err = m.opts.AgentDatastore.UpdateAgent(ctx, &metadatastore.Agent{
+		err = m.opts.Datastore.UpdateAgent(ctx, &metadatastore.Agent{
 			ID:               request.AgentId,
 			AvailabilityZone: request.AvailabilityZone,
 		})
@@ -137,7 +137,7 @@ func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.Reg
 }
 
 func (m *MetadataStoreServer) DeregisterAgent(ctx context.Context, request *pb.DeregisterAgentRequest) (*pb.DeregisterAgentResponse, error) {
-	err := m.opts.AgentDatastore.DeleteAgent(ctx, request.AgentId)
+	err := m.opts.Datastore.DeleteAgent(ctx, request.AgentId)
 	if err != nil {
 		return nil, err
 	}
@@ -149,24 +149,55 @@ func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMe
 
 	az := metadatastore.AvailabilityZone(request.AvailabilityZone)
 
-	_, agents, err := az.Healthy(ctx, 1, m.opts.AgentAliveThreshold, m.opts.AgentDatastore)
+	_, agents, leaderIndex, err := az.Healthy(ctx, 1, m.opts.AgentAliveThreshold, m.opts.Datastore)
 	if err != nil {
 		return nil, err
 	}
 
 	response.ClusterId = m.opts.ClusterID
-	response.Agents = make([]*pb.Agent, 0)
+	if agents != nil {
+		response.Agents = make([]*pb.Agent, len(agents))
+		for i, agent := range agents {
+			response.Agents[i] = &pb.Agent{
+				Id:               agent.ID,
+				AvailabilityZone: agent.AvailabilityZone,
+			}
+		}
+	}
 
-	for _, agent := range agents {
-		response.Agents = append(response.Agents, &pb.Agent{
-			Id:               agent.ID,
-			AvailabilityZone: agent.AvailabilityZone,
+	topicMap := make(map[string]*pb.Topic)
+
+	topics, err := m.opts.Datastore.ReadAllTopics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	partitions, err := m.opts.Datastore.ReadAllPartitions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, partition := range partitions {
+		if topicMap[partition.TopicID] == nil {
+			topicMap[partition.TopicID] = &pb.Topic{
+				TopicId:    partition.TopicID,
+				Partitions: make([]*pb.Partition, 0),
+			}
+		}
+		topicMap[partition.TopicID].Partitions = append(topicMap[partition.TopicID].Partitions, &pb.Partition{
+			LeaderId: agents[leaderIndex].ID,
+			Id:       int32(partition.ID),
 		})
 	}
 
-	// Next step is to return the list of topics, and select an agent/broker to be the leader for all topic partitions
-	// as per https://www.warpstream.com/blog/hacking-the-kafka-protocol#load-balancing
-	// This needs to be done in a round-robin fashion... Which necessitates keeping some state.
+	for _, topic := range topics {
+		if topicMap[topic.ID] != nil {
+			topicMap[topic.ID].Name = topic.Name
+		}
+	}
+
+	for _, topic := range topicMap {
+		response.Topics = append(response.Topics, topic)
+	}
 
 	return &response, nil
 }

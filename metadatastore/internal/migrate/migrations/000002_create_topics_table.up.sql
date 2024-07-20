@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS topics(
 
 CREATE TABLE IF NOT EXISTS partitions(
     id SERIAL NOT NULL PRIMARY KEY,
-    topic_id uuid NOT NULL REFERENCES topics(id),
-    partition_id INTEGER UNIQUE NOT NULL,
+    topic_id uuid NOT NULL REFERENCES topics(topic_id),
+    partition_id INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    UNIQUE (topic_id, partition_id)
 );
