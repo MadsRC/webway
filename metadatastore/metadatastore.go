@@ -7,7 +7,9 @@ import (
 )
 
 type Agent struct {
-	ID               string    `db:"agent_id"`
+	ID               int32     `db:"id"`
+	Hostname         string    `db:"hostname"`
+	Port             int16     `db:"port"`
 	AvailabilityZone string    `db:"availability_zone"`
 	LastSeen         time.Time `db:"last_seen"`
 }
@@ -83,11 +85,12 @@ func getLiveAgentsForAZ(az AvailabilityZone, agents []*Agent, livenessThreshold 
 }
 
 type Datastore interface {
-	CreateAgent(ctx context.Context, agent *Agent) error
-	ReadAgent(ctx context.Context, agentID string) (*Agent, error)
+	CreateAgent(ctx context.Context, agent *Agent) (int32, error)
+	ReadAgent(ctx context.Context, agentID int32) (*Agent, error)
 	ReadAllAgents(ctx context.Context) ([]*Agent, error)
 	UpdateAgent(ctx context.Context, agent *Agent) error
-	DeleteAgent(ctx context.Context, agentID string) error
+	DeleteAgent(ctx context.Context, agentID int32) error
+	TouchAgent(ctx context.Context, agentID int32) error
 
 	CreateTopic(ctx context.Context, topic *Topic) error
 	ReadTopic(ctx context.Context, topicID string) (*Topic, error)

@@ -22,6 +22,7 @@ const (
 	MetadataStore_RegisterAgent_FullMethodName   = "/webway.v1.MetadataStore/RegisterAgent"
 	MetadataStore_DeregisterAgent_FullMethodName = "/webway.v1.MetadataStore/DeregisterAgent"
 	MetadataStore_GetMetadata_FullMethodName     = "/webway.v1.MetadataStore/GetMetadata"
+	MetadataStore_AgentHeartbeat_FullMethodName  = "/webway.v1.MetadataStore/AgentHeartbeat"
 )
 
 // MetadataStoreClient is the client API for MetadataStore service.
@@ -31,6 +32,7 @@ type MetadataStoreClient interface {
 	RegisterAgent(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error)
 	DeregisterAgent(ctx context.Context, in *DeregisterAgentRequest, opts ...grpc.CallOption) (*DeregisterAgentResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
+	AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*Heartbeat, error)
 }
 
 type metadataStoreClient struct {
@@ -71,6 +73,16 @@ func (c *metadataStoreClient) GetMetadata(ctx context.Context, in *GetMetadataRe
 	return out, nil
 }
 
+func (c *metadataStoreClient) AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*Heartbeat, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Heartbeat)
+	err := c.cc.Invoke(ctx, MetadataStore_AgentHeartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MetadataStoreServer is the server API for MetadataStore service.
 // All implementations must embed UnimplementedMetadataStoreServer
 // for forward compatibility
@@ -78,6 +90,7 @@ type MetadataStoreServer interface {
 	RegisterAgent(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error)
 	DeregisterAgent(context.Context, *DeregisterAgentRequest) (*DeregisterAgentResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
+	AgentHeartbeat(context.Context, *Heartbeat) (*Heartbeat, error)
 	mustEmbedUnimplementedMetadataStoreServer()
 }
 
@@ -93,6 +106,9 @@ func (UnimplementedMetadataStoreServer) DeregisterAgent(context.Context, *Deregi
 }
 func (UnimplementedMetadataStoreServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
+}
+func (UnimplementedMetadataStoreServer) AgentHeartbeat(context.Context, *Heartbeat) (*Heartbeat, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AgentHeartbeat not implemented")
 }
 func (UnimplementedMetadataStoreServer) mustEmbedUnimplementedMetadataStoreServer() {}
 
@@ -161,6 +177,24 @@ func _MetadataStore_GetMetadata_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MetadataStore_AgentHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Heartbeat)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MetadataStoreServer).AgentHeartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MetadataStore_AgentHeartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MetadataStoreServer).AgentHeartbeat(ctx, req.(*Heartbeat))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MetadataStore_ServiceDesc is the grpc.ServiceDesc for MetadataStore service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -179,6 +213,10 @@ var MetadataStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMetadata",
 			Handler:    _MetadataStore_GetMetadata_Handler,
+		},
+		{
+			MethodName: "AgentHeartbeat",
+			Handler:    _MetadataStore_AgentHeartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

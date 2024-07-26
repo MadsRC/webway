@@ -1,0 +1,11 @@
+services:
+
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    shm_size: 128mb
+
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

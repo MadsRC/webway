@@ -9,7 +9,7 @@ import (
 	"github.com/madsrc/webway/metadatastore/internal/grpc"
 	"github.com/madsrc/webway/metadatastore/internal/migrate"
 	"github.com/madsrc/webway/metadatastore/internal/pgx"
-	"github.com/madsrc/webway/metadatastore/internal/uuid"
+	"github.com/madsrc/webway/uuid"
 	"log"
 	"net"
 	"os"

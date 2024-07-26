@@ -113,31 +113,29 @@ func (m *MetadataStoreServer) generateClusterID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	m.opts.ClusterID = base64.RawURLEncoding.EncodeToString(b)
+	return m.opts.ClusterID, nil
 }
 
 func (m *MetadataStoreServer) RegisterAgent(ctx context.Context, request *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
-	err := m.opts.Datastore.CreateAgent(ctx, &metadatastore.Agent{
-		ID:               request.AgentId,
+	id, err := m.opts.Datastore.CreateAgent(ctx, &metadatastore.Agent{
+		Hostname:         request.Hostname,
+		Port:             int16(request.Port),
 		AvailabilityZone: request.AvailabilityZone,
 	})
 	if err != nil && !errors.Is(err, pgx.ErrAlreadyExists) {
 		return nil, err
 	}
 	if errors.Is(err, pgx.ErrAlreadyExists) {
-		err = m.opts.Datastore.UpdateAgent(ctx, &metadatastore.Agent{
-			ID:               request.AgentId,
-			AvailabilityZone: request.AvailabilityZone,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
-	return &pb.RegisterAgentResponse{}, nil
+	return &pb.RegisterAgentResponse{
+		Id: id,
+	}, nil
 }
 
 func (m *MetadataStoreServer) DeregisterAgent(ctx context.Context, request *pb.DeregisterAgentRequest) (*pb.DeregisterAgentResponse, error) {
-	err := m.opts.Datastore.DeleteAgent(ctx, request.AgentId)
+	err := m.opts.Datastore.DeleteAgent(ctx, request.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +158,8 @@ func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMe
 		for i, agent := range agents {
 			response.Agents[i] = &pb.Agent{
 				Id:               agent.ID,
+				Hostname:         agent.Hostname,
+				Port:             int32(agent.Port),
 				AvailabilityZone: agent.AvailabilityZone,
 			}
 		}
@@ -200,4 +200,12 @@ func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMe
 	}
 
 	return &response, nil
+}
+
+func (m *MetadataStoreServer) AgentHeartbeat(ctx context.Context, request *pb.Heartbeat) (*pb.Heartbeat, error) {
+	err := m.opts.Datastore.TouchAgent(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
 }

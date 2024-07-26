@@ -44,8 +44,9 @@ func main() {
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(interrupt)
 
-	_, err = svcs.metadataStoreGrpcClient.RegisterAgent(ctx, &pb.RegisterAgentRequest{
-		AgentId:          "agent-1",
+	raresp, err := svcs.metadataStoreGrpcClient.RegisterAgent(ctx, &pb.RegisterAgentRequest{
+		Hostname:         "127.0.0.1",
+		Port:             9092,
 		AvailabilityZone: "us-east-1",
 	})
 	if err != nil {
@@ -68,7 +69,7 @@ func main() {
 		for {
 			select {
 			case <-hbTicker.C:
-				heartbeat(ctx, svcs)
+				heartbeat(ctx, raresp.Id, svcs)
 			case <-hbQuit:
 				return
 			}
@@ -90,7 +91,7 @@ func main() {
 
 	// Deregistering the agent
 	_, err = svcs.metadataStoreGrpcClient.DeregisterAgent(ctx, &pb.DeregisterAgentRequest{
-		AgentId: "agent-1",
+		Id: raresp.Id,
 	})
 	if err != nil {
 		log.Fatalf("failed to deregister agent: %v", err)
@@ -111,7 +112,9 @@ func setupServices(cfg webway.Config) (*services, error) {
 
 	svcs.metadataStoreGrpcClient = pb.NewMetadataStoreClient(svcs.metadataStoreGrpcConn)
 
-	svcs.kafkaServer, err = sarama.NewKafkaServer()
+	svcs.kafkaServer, err = sarama.NewKafkaServer(
+		sarama.WithMetadataStoreGrpcClient(svcs.metadataStoreGrpcClient),
+	)
 
 	return svcs, nil
 }
@@ -121,10 +124,9 @@ var DefaultConfig = map[string]interface{}{
 	"metadatastore.heartbeat_interval": "3s",
 }
 
-func heartbeat(ctx context.Context, svcs *services) {
-	_, err := svcs.metadataStoreGrpcClient.RegisterAgent(ctx, &pb.RegisterAgentRequest{
-		AgentId:          "agent-1",
-		AvailabilityZone: "us-east-1",
+func heartbeat(ctx context.Context, id int32, svcs *services) {
+	_, err := svcs.metadataStoreGrpcClient.AgentHeartbeat(ctx, &pb.Heartbeat{
+		Id: id,
 	})
 	if err != nil {
 		log.Printf("failed to send heartbeat: %v", err)

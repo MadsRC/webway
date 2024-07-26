@@ -7,17 +7,21 @@ service MetadataStore {
   rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse) {};
   rpc DeregisterAgent(DeregisterAgentRequest) returns (DeregisterAgentResponse) {};
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {};
+  rpc AgentHeartbeat(Heartbeat) returns (Heartbeat) {};
 }
 
 message RegisterAgentRequest {
-  string agent_id = 1;
-  string availability_zone = 2;
+  string hostname = 1;
+  int32 port = 2;
+  string availability_zone = 3;
 }
 
-message RegisterAgentResponse{}
+message RegisterAgentResponse{
+  int32 id = 1;
+}
 
 message DeregisterAgentRequest {
-  string agent_id = 1;
+  int32 id = 1;
 }
 
 message DeregisterAgentResponse{}
@@ -33,13 +37,14 @@ message GetMetadataResponse {
 }
 
 message Heartbeat {
-  string agent_id = 1;
-  string availability_zone = 2;
+  int32 id = 1;
 }
 
 message Agent {
-  string id = 1;
-  string availability_zone = 2;
+  int32 id = 1;
+  string hostname = 2;
+  int32 port = 3;
+  string availability_zone = 4;
 }
 
 message Topic {
@@ -50,6 +55,6 @@ message Topic {
 }
 
 message Partition {
-  string leader_id = 1;
+  int32 leader_id = 1;
   int32 id = 2;
 }

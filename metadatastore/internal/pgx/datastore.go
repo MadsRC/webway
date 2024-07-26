@@ -44,20 +44,21 @@ func (a *Datastore) GracefulStop() {
 	a.db.Close()
 }
 
-func (a *Datastore) CreateAgent(ctx context.Context, agent *metadatastore.Agent) error {
-	_, err := a.db.Exec(ctx, "INSERT INTO agents (agent_id, availability_zone, last_seen, deleted_at) VALUES ($1, $2, $3, $4)", agent.ID, agent.AvailabilityZone, time.Now(), nil)
+func (a *Datastore) CreateAgent(ctx context.Context, agent *metadatastore.Agent) (int32, error) {
+	var id int32
+	err := a.db.QueryRow(ctx, "INSERT INTO agents (hostname, port, availability_zone, last_seen, deleted_at) VALUES ($1, $2, $3, $4, $5) RETURNING id", agent.Hostname, agent.Port, agent.AvailabilityZone, time.Now(), nil).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return ErrAlreadyExists
+			return id, ErrAlreadyExists
 		}
-		return err
+		return id, err
 	}
-	return nil
+	return id, nil
 }
 
-func (a *Datastore) ReadAgent(ctx context.Context, agentID string) (*metadatastore.Agent, error) {
-	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE agent_id = $1 AND deleted_at IS NULL ORDER BY id", agentID)
+func (a *Datastore) ReadAgent(ctx context.Context, agentID int32) (*metadatastore.Agent, error) {
+	rows, _ := a.db.Query(ctx, "SELECT id, hostname, port, availability_zone, last_seen FROM agents WHERE id = $1 AND deleted_at IS NULL ORDER BY id", agentID)
 	agent, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[metadatastore.Agent])
 	if err != nil {
 		return nil, err
@@ -66,7 +67,7 @@ func (a *Datastore) ReadAgent(ctx context.Context, agentID string) (*metadatasto
 }
 
 func (a *Datastore) ReadAllAgents(ctx context.Context) ([]*metadatastore.Agent, error) {
-	rows, _ := a.db.Query(ctx, "SELECT agent_id, availability_zone, last_seen FROM agents WHERE deleted_at IS NULL ORDER BY id")
+	rows, _ := a.db.Query(ctx, "SELECT id, hostname, port, availability_zone, last_seen FROM agents WHERE deleted_at IS NULL ORDER BY id")
 	agents, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[metadatastore.Agent])
 	if err != nil {
 		return nil, err
@@ -75,20 +76,28 @@ func (a *Datastore) ReadAllAgents(ctx context.Context) ([]*metadatastore.Agent, 
 }
 
 func (a *Datastore) UpdateAgent(ctx context.Context, agent *metadatastore.Agent) error {
-	_, err := a.db.Exec(ctx, "UPDATE agents SET availability_zone = $1, last_seen = $2, deleted_at = null WHERE agent_id = $3", agent.AvailabilityZone, time.Now(), agent.ID)
+	_, err := a.db.Exec(ctx, "UPDATE agents SET hostname = $1, port = $2, availability_zone = $3, last_seen = $4, deleted_at = null WHERE id = $5", agent.Hostname, agent.Port, agent.AvailabilityZone, time.Now(), agent.ID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a *Datastore) DeleteAgent(ctx context.Context, agentID string) error {
-	tag, err := a.db.Exec(ctx, "UPDATE agents SET deleted_at = $1 WHERE agent_id = $2", time.Now(), agentID)
+func (a *Datastore) DeleteAgent(ctx context.Context, agentID int32) error {
+	tag, err := a.db.Exec(ctx, "UPDATE agents SET deleted_at = $1 WHERE id = $2", time.Now(), agentID)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+func (a *Datastore) TouchAgent(ctx context.Context, agentID int32) error {
+	_, err := a.db.Exec(ctx, "UPDATE agents SET last_seen = $1 WHERE id = $2", time.Now(), agentID)
+	if err != nil {
+		return err
 	}
 	return nil
 }
