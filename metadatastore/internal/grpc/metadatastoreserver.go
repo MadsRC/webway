@@ -8,6 +8,7 @@ import (
 	pb "github.com/madsrc/webway/gen/go/webway/v1"
 	"github.com/madsrc/webway/metadatastore"
 	"github.com/madsrc/webway/metadatastore/internal/pgx"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"time"
 )
 
@@ -202,10 +203,10 @@ func (m *MetadataStoreServer) GetMetadata(ctx context.Context, request *pb.GetMe
 	return &response, nil
 }
 
-func (m *MetadataStoreServer) AgentHeartbeat(ctx context.Context, request *pb.Heartbeat) (*pb.Heartbeat, error) {
+func (m *MetadataStoreServer) AgentHeartbeat(ctx context.Context, request *pb.Heartbeat) (*emptypb.Empty, error) {
 	err := m.opts.Datastore.TouchAgent(ctx, request.Id)
 	if err != nil {
 		return nil, err
 	}
-	return request, nil
+	return &emptypb.Empty{}, nil
 }

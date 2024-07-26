@@ -1,4 +1,6 @@
 version: v2
+deps:
+  - buf.build/protocolbuffers/wellknowntypes:v27.02
 modules:
   - path: proto
 lint:

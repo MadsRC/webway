@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -32,7 +33,7 @@ type MetadataStoreClient interface {
 	RegisterAgent(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error)
 	DeregisterAgent(ctx context.Context, in *DeregisterAgentRequest, opts ...grpc.CallOption) (*DeregisterAgentResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
-	AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*Heartbeat, error)
+	AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type metadataStoreClient struct {
@@ -73,9 +74,9 @@ func (c *metadataStoreClient) GetMetadata(ctx context.Context, in *GetMetadataRe
 	return out, nil
 }
 
-func (c *metadataStoreClient) AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*Heartbeat, error) {
+func (c *metadataStoreClient) AgentHeartbeat(ctx context.Context, in *Heartbeat, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Heartbeat)
+	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, MetadataStore_AgentHeartbeat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -90,7 +91,7 @@ type MetadataStoreServer interface {
 	RegisterAgent(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error)
 	DeregisterAgent(context.Context, *DeregisterAgentRequest) (*DeregisterAgentResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
-	AgentHeartbeat(context.Context, *Heartbeat) (*Heartbeat, error)
+	AgentHeartbeat(context.Context, *Heartbeat) (*emptypb.Empty, error)
 	mustEmbedUnimplementedMetadataStoreServer()
 }
 
@@ -107,7 +108,7 @@ func (UnimplementedMetadataStoreServer) DeregisterAgent(context.Context, *Deregi
 func (UnimplementedMetadataStoreServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
 }
-func (UnimplementedMetadataStoreServer) AgentHeartbeat(context.Context, *Heartbeat) (*Heartbeat, error) {
+func (UnimplementedMetadataStoreServer) AgentHeartbeat(context.Context, *Heartbeat) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AgentHeartbeat not implemented")
 }
 func (UnimplementedMetadataStoreServer) mustEmbedUnimplementedMetadataStoreServer() {}
