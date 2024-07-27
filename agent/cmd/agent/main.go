@@ -11,6 +11,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -44,10 +46,20 @@ func main() {
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(interrupt)
 
+	advertisedHostname := strings.Split(cfg.String("agent.advertised_address"), ":")[0]
+	advertisedPort := 9092
+	if len(strings.Split(cfg.String("agent.advertised_address"), ":")) > 1 {
+		advertisedPort, err = strconv.Atoi(strings.Split(cfg.String("advertised_address"), ":")[1])
+		if err != nil {
+			log.Fatalf("failed to parse port from agent.advertised_address: %v", err)
+		}
+	}
+
+	// Registering the agent
 	raresp, err := svcs.metadataStoreGrpcClient.RegisterAgent(ctx, &pb.RegisterAgentRequest{
-		Hostname:         "127.0.0.1",
-		Port:             9092,
-		AvailabilityZone: "us-east-1",
+		Hostname:         advertisedHostname,
+		Port:             int32(advertisedPort),
+		AvailabilityZone: cfg.String("agent.availability_zone"),
 	})
 	if err != nil {
 		log.Fatalf("failed to register agent: %v", err)
@@ -60,7 +72,7 @@ func main() {
 	hbTicker := time.NewTicker(hbInterval)
 	hbQuit := make(chan struct{})
 
-	lis, err := net.Listen("tcp", "0.0.0.0:9092")
+	lis, err := net.Listen("tcp", cfg.String("agent.listen_address"))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -122,6 +134,9 @@ func setupServices(cfg webway.Config) (*services, error) {
 var DefaultConfig = map[string]interface{}{
 	"metadatastore.grpc.address":       "127.0.0.1:9068",
 	"metadatastore.heartbeat_interval": "3s",
+	"agent.listen_address":             "0.0.0.0:9092",
+	"agent.advertised_address":         "127.0.0.1:9092",
+	"agent.availability_zone":          "us-east-1",
 }
 
 func heartbeat(ctx context.Context, id int32, svcs *services) {
